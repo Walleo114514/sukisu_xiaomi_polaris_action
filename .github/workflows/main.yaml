@@ -46,7 +46,7 @@ jobs:
           cd /home/runner
           mkdir tmp
           cd tmp
-          git clone https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git -b main KernelSU
+          git clone https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git -b main lineage-12
           cd KernelSU
           KSU_VER=$(expr 10000 + $(git rev-list --count HEAD) + 200)
           echo "KSU_VER=${KSU_VER}" >> $GITHUB_ENV
