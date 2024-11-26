@@ -1,7 +1,9 @@
 name: build_kernelsu_for_polaris
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
   # schedule:
   #   - cron: "0 4 * * 5"
 jobs:
@@ -46,7 +48,7 @@ jobs:
           cd /home/runner
           mkdir tmp
           cd tmp
-          git clone https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git -b main lineage-12
+          git clone https://github.com/Initsnow/KernelSU_Patch.git -b main KernelSU
           cd KernelSU
           KSU_VER=$(expr 10000 + $(git rev-list --count HEAD) + 200)
           echo "KSU_VER=${KSU_VER}" >> $GITHUB_ENV
@@ -60,7 +62,7 @@ jobs:
       - name: Download kernel source
         run: |
           cd /home/runner
-          git clone https://github.com/Initsnow/android_kernel_xiaomi_sdm845.git -b kernelsu --depth=1 kernel_sdm845
+          git clone https://github.com/Initsnow/android_kernel_xiaomi_sdm845.git -b lieage-21 kernel_sdm845
 
       - name: Download gcc and clang
         run: |
