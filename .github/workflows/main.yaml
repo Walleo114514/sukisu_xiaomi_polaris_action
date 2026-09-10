@@ -12,7 +12,7 @@ jobs:
       useAnykernel: true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
 
       - name: Set swap to 10G
         uses: pierotofy/set-swap-space@master
@@ -90,7 +90,7 @@ jobs:
           echo "Flash zip using recovery" >> $GITHUB_STEP_SUMMARY
 
       - name: "Upload AnyKernel3 image"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success()
         with:
           name: "AnyKernel3"
@@ -98,7 +98,7 @@ jobs:
 
       - name: "Create GitHub Release"
         continue-on-error: true
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: ${{ env.useAnykernel == 'true'}}
         with:
           tag_name: "v${{ env.START_TIME }}.${{ github.run_number }}"
