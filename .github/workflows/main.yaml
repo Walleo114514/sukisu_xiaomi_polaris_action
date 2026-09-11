@@ -1,4 +1,4 @@
-name: build_sukisu_ultra_for_polaris
+name: build_kernelsu_awkox
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
       - name: Download kernel source
         run: |
           cd /home/runner
-          git clone https://github.com/hotianbexuanto/android_kernel_xiaomi_sdm845_sukisu.git -b lineage-22.2 kernel_sdm845 --depth=1
+          git clone https://github.com/awkox/kernel_mi845_lineage.git kernel_sdm845 --depth=1
 
       - name: Download gcc and clang
         run: |
@@ -38,10 +38,11 @@ jobs:
           git clone https://github.com/PixelExperience/prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git --depth=1 gcc_arm
           git clone https://github.com/PixelExperience/prebuilts_clang_kernel_linux-x86_clang-r416183b.git --depth=1 clang-r416183b
 
-      - name: Integrate SukiSU Ultra
+      - name: Integrate KernelSU
         run: |
           cd /home/runner/kernel_sdm845
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
+          # 使用 KernelSU 官方，指定 v0.9.5（对非 GKI 4.9 兼容性较好）
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Configure kernel
         run: |
@@ -50,28 +51,13 @@ jobs:
           cat ./arch/arm64/configs/vendor/xiaomi/mi845_defconfig > ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           cat ./arch/arm64/configs/vendor/xiaomi/polaris.config >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
 
-          # --- SukiSU Ultra 核心配置 ---
+          # --- KernelSU 核心配置 ---
           echo "CONFIG_KSU=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
-          echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KSU_DEBUG=n" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KALLSYMS=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KALLSYMS_ALL=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
 
-          # --- 4.9 内核禁用 SUSFS ---
-          echo "# CONFIG_KSU_SUSFS is not set" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
-
           make O=out ARCH=arm64 vendor/xiaomi/polaris_defconfig
-
-          # 强制清除 SUSFS 及子选项
-          ./scripts/config --file out/.config -d KSU_SUSFS
-          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_PATH
-          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_MOUNT
-          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_KSTAT
-          ./scripts/config --file out/.config -d KSU_SUSFS_SPOOF_UNAME
-          ./scripts/config --file out/.config -d KSU_SUSFS_OPEN_REDIRECT
-          ./scripts/config --file out/.config -d KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
-          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_OVERLAYFS
-
           make O=out ARCH=arm64 olddefconfig
 
           echo "=== Final KSU config ==="
@@ -97,8 +83,7 @@ jobs:
           cd /home/runner/kernel_sdm845/AnyKernel3
           zip -r ../AnyKernel3.zip *
 
-          echo "SukiSU Ultra on hotianbexuanto kernel (no patches)" >> $GITHUB_STEP_SUMMARY
-          echo "Flash zip using recovery" >> $GITHUB_STEP_SUMMARY
+          echo "KernelSU official on awkox kernel" >> $GITHUB_STEP_SUMMARY
 
       - name: "Upload AnyKernel3 image"
         uses: actions/upload-artifact@v4
@@ -113,6 +98,6 @@ jobs:
         if: ${{ env.useAnykernel == 'true'}}
         with:
           tag_name: "v${{ env.START_TIME }}.${{ github.run_number }}"
-          body: "SukiSU Ultra for MIX 2S (polaris) - hotianbexuanto kernel, no patches"
+          body: "KernelSU (official) for MIX 2S (polaris) - awkox kernel"
           files: "/home/runner/kernel_sdm845/AnyKernel3.zip"
           generate_release_notes: true
