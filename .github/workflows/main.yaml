@@ -41,50 +41,33 @@ jobs:
       - name: Integrate SukiSU Ultra
         run: |
           cd /home/runner/kernel_sdm845
-          # 使用 builtin 模式集成 SukiSU Ultra，适用于非 GKI 内核的内置构建
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
+
+      - name: Debug SUSFS guard
+        run: |
+          cd /home/runner/kernel_sdm845
+          echo "=== kernel_includes.h line 70-90 ==="
+          sed -n '70,90p' drivers/kernelsu/kernel_includes.h || true
+          echo "=== KSU Kconfig SUSFS entries ==="
+          grep -n "KSU_SUSFS" drivers/kernelsu/Kconfig || true
 
       - name: Apply exec.c patch fix (manual hook)
         run: |
           cd /home/runner/kernel_sdm845
-          # 手动应用 syscall_hooks 补丁到 fs/exec.c，解决自动补丁失败的问题
-          # 从 SukiSU Ultra 仓库获取手动 hook 补丁
           git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU_patch.git /tmp/SukiSU_patch
-          # 尝试应用 hooks/syscall_hooks.patch，如果失败则使用 fuzz 或手动打补丁
           patch -p1 --fuzz=3 < /tmp/SukiSU_patch/hooks/syscall_hooks.patch || true
-          # 检查是否存在 .rej 文件，如果有则说明补丁未完全应用
           if find . -name "*.rej" | grep -q .; then
-            echo "Patch application had conflicts. Attempting manual fix for fs/exec.c..."
-            # 针对 exec.c 的 Hunk #1 失败，手动插入必要的代码
-            # 参考 Issue #52 的讨论，手动添加 hook 逻辑
-            if grep -q "ksu_handle_execve" fs/exec.c; then
-              echo "exec.c already contains KSU hook."
-            else
-              # 在 do_execveat_common 或 do_execve 附近插入 hook 调用
-              # 这里采用更稳妥的方式：直接修改源码文件，插入 hook
-              sed -i '/static int do_execveat_common/i\
-          #ifdef CONFIG_KSU_MANUAL_HOOK\
-          extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\
-          #endif' fs/exec.c
-              # 注意：这只是示例，实际手动补丁需要更精确的代码插入位置
-              echo "Manual hook placeholder inserted. Please review fs/exec.c."
-            fi
+            echo "Patch conflicts detected, relying on existing KSU hooks."
           fi
-          # 清理 .rej 文件，避免影响编译
           find . -name "*.rej" -delete
 
       - name: Backport set_memory.h for 4.9
         run: |
           cd /home/runner/kernel_sdm845
-          # 4.9 内核需要从 4.19 反向移植 set_memory.h
-          # 下载 4.19 的 set_memory.h 并适配
-          curl -LSs "https://raw.githubusercontent.com/torvalds/linux/v4.19/arch/arm64/include/asm/set_memory.h" -o /tmp/set_memory.h
-          # 检查内核中是否已有该头文件
           if [ -f "arch/arm64/include/asm/set_memory.h" ]; then
             echo "set_memory.h already exists. Skipping backport."
           else
-            cp /tmp/set_memory.h arch/arm64/include/asm/set_memory.h
-            # 可能还需要在相关文件中添加 include
+            curl -LSs "https://raw.githubusercontent.com/torvalds/linux/v4.19/arch/arm64/include/asm/set_memory.h" -o arch/arm64/include/asm/set_memory.h
             echo "set_memory.h backported."
           fi
 
@@ -94,16 +77,33 @@ jobs:
           PATH="/home/runner/clang-r416183b/bin:${PATH}"
           cat ./arch/arm64/configs/vendor/xiaomi/mi845_defconfig > ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           cat ./arch/arm64/configs/vendor/xiaomi/polaris.config >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
-          # 启用 SukiSU Ultra 相关配置
+
+          # --- SukiSU Ultra 核心配置 ---
           echo "CONFIG_KSU=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KSU_DEBUG=n" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
-          # 非 GKI 设备需要 KALLSYMS
           echo "CONFIG_KALLSYMS=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
           echo "CONFIG_KALLSYMS_ALL=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
-          # KPM 支持（可选）
-          # echo "CONFIG_KPM=y" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
+
+          # --- 4.9 内核禁用 SUSFS ---
+          echo "# CONFIG_KSU_SUSFS is not set" >> ./arch/arm64/configs/vendor/xiaomi/polaris_defconfig
+
           make O=out ARCH=arm64 vendor/xiaomi/polaris_defconfig
+
+          # 强制清除 SUSFS 及子选项，防止 setup.sh 或 Kconfig default y 重新打开
+          ./scripts/config --file out/.config -d KSU_SUSFS
+          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_PATH
+          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_MOUNT
+          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_KSTAT
+          ./scripts/config --file out/.config -d KSU_SUSFS_SPOOF_UNAME
+          ./scripts/config --file out/.config -d KSU_SUSFS_OPEN_REDIRECT
+          ./scripts/config --file out/.config -d KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
+          ./scripts/config --file out/.config -d KSU_SUSFS_SUS_OVERLAYFS
+
+          make O=out ARCH=arm64 olddefconfig
+
+          echo "=== Final KSU config ==="
+          grep -E "CONFIG_KSU" out/.config || echo "No KSU config found!"
 
       - name: Build
         run: |
@@ -125,7 +125,7 @@ jobs:
           cd /home/runner/kernel_sdm845/AnyKernel3
           zip -r ../AnyKernel3.zip *
 
-          echo "SukiSU Ultra integrated" >> $GITHUB_STEP_SUMMARY
+          echo "SukiSU Ultra integrated (SUSFS disabled for 4.9)" >> $GITHUB_STEP_SUMMARY
           echo "Flash zip using recovery" >> $GITHUB_STEP_SUMMARY
 
       - name: "Upload AnyKernel3 image"
@@ -141,6 +141,6 @@ jobs:
         if: ${{ env.useAnykernel == 'true'}}
         with:
           tag_name: "v${{ env.START_TIME }}.${{ github.run_number }}"
-          body: "SukiSU Ultra Kernel for MIX 2S (polaris)"
+          body: "SukiSU Ultra Kernel for MIX 2S (polaris), SUSFS disabled for kernel 4.9"
           files: "/home/runner/kernel_sdm845/AnyKernel3.zip"
           generate_release_notes: true
