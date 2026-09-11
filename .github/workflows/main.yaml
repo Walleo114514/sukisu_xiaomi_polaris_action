@@ -29,7 +29,7 @@ jobs:
       - name: Download kernel source
         run: |
           cd /home/runner
-          git clone https://github.com/LineageOS/android_kernel_xiaomi_sdm845.git -b lineage-22.2 kernel_sdm845 --depth=1
+          git clone https://github.com/hotianbexuanto/android_kernel_xiaomi_sdm845_sukisu.git -b lineage-22.2 kernel_sdm845 --depth=1
 
       - name: Download gcc and clang
         run: |
@@ -42,34 +42,6 @@ jobs:
         run: |
           cd /home/runner/kernel_sdm845
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
-
-      - name: Debug SUSFS guard
-        run: |
-          cd /home/runner/kernel_sdm845
-          echo "=== kernel_includes.h line 70-90 ==="
-          sed -n '70,90p' drivers/kernelsu/kernel_includes.h || true
-          echo "=== KSU Kconfig SUSFS entries ==="
-          grep -n "KSU_SUSFS" drivers/kernelsu/Kconfig || true
-
-      - name: Apply exec.c patch fix (manual hook)
-        run: |
-          cd /home/runner/kernel_sdm845
-          git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU_patch.git /tmp/SukiSU_patch
-          patch -p1 --fuzz=3 < /tmp/SukiSU_patch/hooks/syscall_hooks.patch || true
-          if find . -name "*.rej" | grep -q .; then
-            echo "Patch conflicts detected, relying on existing KSU hooks."
-          fi
-          find . -name "*.rej" -delete
-
-      - name: Backport set_memory.h for 4.9
-        run: |
-          cd /home/runner/kernel_sdm845
-          if [ -f "arch/arm64/include/asm/set_memory.h" ]; then
-            echo "set_memory.h already exists. Skipping backport."
-          else
-            curl -LSs "https://raw.githubusercontent.com/torvalds/linux/v4.19/arch/arm64/include/asm/set_memory.h" -o arch/arm64/include/asm/set_memory.h
-            echo "set_memory.h backported."
-          fi
 
       - name: Configure kernel
         run: |
@@ -90,7 +62,7 @@ jobs:
 
           make O=out ARCH=arm64 vendor/xiaomi/polaris_defconfig
 
-          # 强制清除 SUSFS 及子选项，防止 setup.sh 或 Kconfig default y 重新打开
+          # 强制清除 SUSFS 及子选项
           ./scripts/config --file out/.config -d KSU_SUSFS
           ./scripts/config --file out/.config -d KSU_SUSFS_SUS_PATH
           ./scripts/config --file out/.config -d KSU_SUSFS_SUS_MOUNT
@@ -125,7 +97,7 @@ jobs:
           cd /home/runner/kernel_sdm845/AnyKernel3
           zip -r ../AnyKernel3.zip *
 
-          echo "SukiSU Ultra integrated (SUSFS disabled for 4.9)" >> $GITHUB_STEP_SUMMARY
+          echo "SukiSU Ultra on hotianbexuanto kernel (no patches)" >> $GITHUB_STEP_SUMMARY
           echo "Flash zip using recovery" >> $GITHUB_STEP_SUMMARY
 
       - name: "Upload AnyKernel3 image"
@@ -141,6 +113,6 @@ jobs:
         if: ${{ env.useAnykernel == 'true'}}
         with:
           tag_name: "v${{ env.START_TIME }}.${{ github.run_number }}"
-          body: "SukiSU Ultra Kernel for MIX 2S (polaris), SUSFS disabled for kernel 4.9"
+          body: "SukiSU Ultra for MIX 2S (polaris) - hotianbexuanto kernel, no patches"
           files: "/home/runner/kernel_sdm845/AnyKernel3.zip"
           generate_release_notes: true
